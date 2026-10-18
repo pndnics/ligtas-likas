@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIGTAS-LIKAS | Flood-Aware Route Demo</title>
+<style>
+  :root { --navy:#123047; --blue:#167d9a; --pale:#eef7f8; --red:#c84444; --green:#19805b; --gold:#f2b84b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Arial,Helvetica,sans-serif; background:#f3f7fa; color:#183044; }
+  header { background:var(--navy); color:white; padding:24px 18px; }
+  header .wrap, main { max-width:1050px; margin:auto; }
+  h1 { margin:0 0 6px; font-size:clamp(1.6rem,4vw,2.4rem); }
+  header p { margin:0; color:#d9eaf0; line-height:1.5; }
+  main { padding:20px 14px 36px; }
+  .notice { border-left:5px solid var(--gold); background:#fff8e8; padding:12px 14px; border-radius:8px; line-height:1.5; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:1.3fr .7fr; gap:16px; }
+  .panel { background:white; border:1px solid #dce7ed; border-radius:14px; padding:16px; box-shadow:0 4px 16px #17394b0a; }
+  h2 { font-size:1.1rem; margin:0 0 12px; }
+  .map { width:100%; height:auto; display:block; background:#f7fbfc; border-radius:10px; border:1px solid #e2edf1; }
+  .road { stroke:#9bb0bc; stroke-width:9; stroke-linecap:round; }
+  .road.closed { stroke:var(--red); stroke-dasharray:8 7; }
+  .road.active { stroke:var(--green); stroke-width:7; }
+  .node { fill:white; stroke:#527184; stroke-width:3; }
+  .node.start { fill:#d9f3e7; stroke:var(--green); }
+  .node.end { fill:#fff0ce; stroke:#c38b18; }
+  .node-label { font-size:15px; font-weight:bold; fill:#183044; text-anchor:middle; dominant-baseline:middle; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; font-size:.88rem; margin-top:10px; color:#506778; }
+  .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; }
+  .controls { display:grid; gap:10px; }
+  label { display:flex; align-items:center; gap:9px; padding:10px; border:1px solid #e0e9ee; border-radius:9px; cursor:pointer; line-height:1.35; }
+  input[type=checkbox] { width:18px; height:18px; accent-color:var(--blue); flex-shrink:0; }
+  button { border:0; border-radius:9px; padding:12px 14px; font-weight:bold; cursor:pointer; background:var(--blue); color:white; font-size:.95rem; }
+  button.secondary { background:#e8f1f4; color:var(--navy); }
+  button:hover { filter:brightness(.96); }
+  .result { background:var(--pale); border-radius:10px; padding:13px; margin-top:14px; line-height:1.55; }
+  .result strong { color:var(--navy); }
+  .status { font-weight:bold; }
+  .status.ok { color:var(--green); }
+  .status.bad { color:var(--red); }
+  .small { font-size:.88rem; color:#587080; line-height:1.5; }
+  #log { margin:8px 0 0; padding-left:20px; max-height:130px; overflow:auto; font-size:.88rem; line-height:1.5; }
+  footer { text-align:center; color:#6a7f8d; padding:0 14px 24px; font-size:.82rem; }
+  @media(max-width:760px) { .grid { grid-template-columns:1fr; } .panel { padding:13px; } }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>LIGTAS-LIKAS</h1>
+  <p>Flood-aware evacuation route recommendation · Interactive research prototype</p>
+</div></header>
+<main>
+  <div class="notice"><strong>Prototype notice:</strong> This website uses a fictional road network and manually selected flood conditions. It is for classroom testing only—not for real emergency navigation or safety decisions.</div>
+  <div class="grid">
+    <section class="panel">
+      <h2>Simulated community road map</h2>
+      <svg class="map" viewBox="0 0 600 360" role="img" aria-label="Fictional road network with start point A and evacuation shelter F">
+        <line id="road-AB" class="road" x1="90" y1="180" x2="230" y2="90"/>
+        <line id="road-AC" class="road" x1="90" y1="180" x2="230" y2="270"/>
+        <line id="road-BD" class="road" x1="230" y1="90" x2="370" y2="90"/>
+        <line id="road-CD" class="road" x1="230" y1="270" x2="370" y2="90"/>
+        <line id="road-CE" class="road" x1="230" y1="270" x2="440" y2="270"/>
+        <line id="road-DE" class="road" x1="370" y1="90" x2="440" y2="270"/>
+        <line id="road-DF" class="road" x1="370" y1="90" x2="520" y2="180"/>
+        <line id="road-EF" class="road" x1="440" y1="270" x2="520" y2="180"/>
+        <g><circle class="node start" cx="90" cy="180" r="23"/><text class="node-label" x="90" y="180">A</text></g>
+        <g><circle class="node" cx="230" cy="90" r="23"/><text class="node-label" x="230" y="90">B</text></g>
+        <g><circle class="node" cx="230" cy="270" r="23"/><text class="node-label" x="230" y="270">C</text></g>
+        <g><circle class="node" cx="370" cy="90" r="23"/><text class="node-label" x="370" y="90">D</text></g>
+        <g><circle class="node" cx="440" cy="270" r="23"/><text class="node-label" x="440" y="270">E</text></g>
+        <g><circle class="node end" cx="520" cy="180" r="25"/><text class="node-label" x="520" y="180">F</text></g>
+        <text x="90" y="220" font-size="12" text-anchor="middle" fill="#19805b">START</text>
+        <text x="520" y="220" font-size="12" text-anchor="middle" fill="#a16d00">SHELTER</text>
+      </svg>
+      <div class="legend">
+        <span><i class="dot" style="background:#19805b"></i>Recommended route</span>
+        <span><i class="dot" style="background:#c84444"></i>Marked unsafe</span>
+        <span><i class="dot" style="background:#9bb0bc"></i>Other road</span>
+      </div>
+      <div class="result" aria-live="polite">
+        <div><strong>Recommended route:</strong> <span id="route">Calculating…</span></div>
+        <div><strong>Total route cost:</strong> <span id="cost">—</span> illustrative units</div>
+        <div><strong>Status:</strong> <span id="status" class="status">—</span></div>
+      </div>
+    </section>
+    <aside class="panel">
+      <h2>Simulate road conditions</h2>
+      <p class="small">Tick a road to mark it unsafe. The route finder will exclude that road and calculate a new route.</p>
+      <div class="controls">
+        <label><input type="checkbox" data-edge="AB"> Road A–B is flooded</label>
+        <label><input type="checkbox" data-edge="AC"> Road A–C is flooded</label>
+        <label><input type="checkbox" data-edge="BD"> Road B–D is flooded</label>
+        <label><input type="checkbox" data-edge="CD"> Road C–D is flooded</label>
+        <label><input type="checkbox" data-edge="CE"> Road C–E is flooded</label>
+        <label><input type="checkbox" data-edge="DE"> Road D–E is flooded</label>
+        <label><input type="checkbox" data-edge="DF"> Road D–F is flooded</label>
+        <label><input type="checkbox" data-edge="EF"> Road E–F is flooded</label>
+        <button id="recalculate">Recalculate route</button>
+        <button id="reset" class="secondary">Reset simulation</button>
+      </div>
+      <div class="result">
+        <strong>Roads marked unsafe:</strong> <span id="closedCount">0</span>
+        <p class="small" style="margin-bottom:0">The route is computed with Dijkstra’s shortest-path algorithm on this sample network. It is not machine learning.</p>
+      </div>
+    </aside>
+  </div>
+  <section class="panel" style="margin-top:16px">
+    <h2>Simulation event log</h2>
+    <p class="small">Use this log to document the scenarios tested during your research.</p>
+    <ol id="log"><li>Prototype loaded. Initial route calculated.</li></ol>
+  </section>
+</main>
+<footer>LIGTAS-LIKAS student research prototype · Fictional data only</footer>
+<script>
+const edges = [
+  {id:"AB",a:"A",b:"B",w:3},{id:"AC",a:"A",b:"C",w:4},
+  {id:"BD",a:"B",b:"D",w:3},{id:"CD",a:"C",b:"D",w:2},
+  {id:"CE",a:"C",b:"E",w:3},{id:"DE",a:"D",b:"E",w:3},
+  {id:"DF",a:"D",b:"F",w:4},{id:"EF",a:"E",b:"F",w:4}
+];
+const unsafe = new Set();
+const nodes = ["A","B","C","D","E","F"];
+const routeEl = document.getElementById("route");
+const costEl = document.getElementById("cost");
+const statusEl = document.getElementById("status");
+const closedCountEl = document.getElementById("closedCount");
+const logEl = document.getElementById("log");
+
+function dijkstra(start, goal) {
+  const dist = Object.fromEntries(nodes.map(n => [n, Infinity]));
+  const previous = {};
+  const visited = new Set();
+  dist[start] = 0;
+  while (visited.size < nodes.length) {
+    let current = null;
+    for (const n of nodes) {
+      if (!visited.has(n) && (current === null || dist[n] < dist[current])) current = n;
+    }
+    if (current === null || dist[current] === Infinity) break;
+    if (current === goal) break;
+    visited.add(current);
+    for (const e of edges) {
+      if (unsafe.has(e.id)) continue;
+      let next = null;
+      if (e.a === current) next = e.b;
+      else if (e.b === current) next = e.a;
+      if (next && !visited.has(next) && dist[current] + e.w < dist[next]) {
+        dist[next] = dist[current] + e.w;
+        previous[next] = current;
+      }
+    }
+  }
+  if (dist[goal] === Infinity) return null;
+  const path = [];
+  let step = goal;
+  while (step) {
+    path.unshift(step);
+    if (step === start) break;
+    step = previous[step];
+  }
+  return {path, cost:dist[goal]};
+}
+function addLog(message) {
+  const item = document.createElement("li");
+  item.textContent = new Date().toLocaleTimeString() + " — " + message;
+  logEl.prepend(item);
+}
+function recalculate(shouldLog=true) {
+  const result = dijkstra("A","F");
+  for (const e of edges) {
+    const line = document.getElementById("road-" + e.id);
+    line.classList.toggle("closed", unsafe.has(e.id));
+    line.classList.remove("active");
+  }
+  closedCountEl.textContent = unsafe.size;
+  if (result) {
+    routeEl.textContent = result.path.join(" → ");
+    costEl.textContent = result.cost;
+    statusEl.textContent = "A route is available in this simulation";
+    statusEl.className = "status ok";
+    for (let i=0; i<result.path.length-1; i++) {
+      const pair = [result.path[i],result.path[i+1]];
+      const edge = edges.find(e => (e.a===pair[0]&&e.b===pair[1]) || (e.a===pair[1]&&e.b===pair[0]));
+      if (edge) document.getElementById("road-"+edge.id).classList.add("active");
+    }
+    if (shouldLog) addLog("Route updated: " + result.path.join(" → ") + " (cost " + result.cost + ").");
+  } else {
+    routeEl.textContent = "No available route";
+    costEl.textContent = "—";
+    statusEl.textContent = "No path found in this simulation";
+    statusEl.className = "status bad";
+    if (shouldLog) addLog("No route found after unsafe roads were excluded.");
+  }
+}
+document.querySelectorAll('input[data-edge]').forEach(input => {
+  input.addEventListener("change", () => {
+    if (input.checked) unsafe.add(input.dataset.edge);
+    else unsafe.delete(input.dataset.edge);
+    recalculate();
+  });
+});
+document.getElementById("recalculate").addEventListener("click", () => recalculate());
+document.getElementById("reset").addEventListener("click", () => {
+  unsafe.clear();
+  document.querySelectorAll('input[data-edge]').forEach(input => input.checked = false);
+  recalculate();
+  addLog("Simulation reset.");
+});
+recalculate(false);
+</script>
+</body>
+</html>
